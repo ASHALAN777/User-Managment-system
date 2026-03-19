@@ -10,8 +10,8 @@ const Signupcontrol = async (req, res) => {
     const { name, email, password, role, adminCode } = req.body;
     const lowerEmail = email.toLowerCase();
 
+    // Check admin code
     if (role === "Admin") {
-     
       if (adminCode !== process.env.ADMIN_SIGNUP_CODE) {
         return res.status(403).json({
           message: "Invalid admin code!",
@@ -20,44 +20,40 @@ const Signupcontrol = async (req, res) => {
       }
     }
 
-    const user = await UserModel.findOne({ email: lowerEmail });
-
-    if (user) {
-      return res.status(409).json({ message: "User exist", succes: false });
+    // Check if user already exists
+    const existingUser = await UserModel.findOne({ email: lowerEmail });
+    if (existingUser) {
+      return res.status(409).json({ message: "User already exists", success: false });
     }
-    const userModel = new UserModel({
-      name,
-      email: lowerEmail,
-      password,
-      role,
-    });
-    userModel.password = await bcrypt.hash(password, 10);
 
+    // Save user
+    const userModel = new UserModel({ name, email: lowerEmail, password, role });
+    userModel.password = await bcrypt.hash(password, 10);
     await userModel.save();
-    //   sendgrid
-    await sgMail.send({
-      from: process.env.SENDGRID_FROM,
-      to: lowerEmail,
-      subject: "Registration Successful! 🎉",
-      html: `    <div style="font-family: Arial, sans-serif; padding: 20px;">
+
+    // ✅ Respond success FIRST before email
+    res.status(201).json({ message: "Signup successful", success: true });
+
+    // ✅ Send email AFTER response — failure won't affect signup
+    try {
+      await sgMail.send({
+        from: process.env.SENDGRID_FROM,
+        to: lowerEmail,
+        subject: "Registration Successful! 🎉",
+        html: `<div style="font-family: Arial, sans-serif; padding: 20px;">
           <h2>Welcome, ${name}! 🎉</h2>
           <p>Your registration was <strong>successful!</strong></p>
           <p>You can now login with your email and password.</p>
           <p>Email: <strong>${lowerEmail}</strong></p>
         </div>`,
-    });
-    
-    // res.json({ message: "OTP send to email", success: true });
+      });
+    } catch (emailError) {
+      console.error("Email sending failed:", emailError.message);
+    }
 
-    res.status(201).json({
-      message: "signup successful",
-      success: true,
-    });
   } catch (error) {
-    return res.status(500).json({
-      message: "signup failed",
-      success: false,
-    });
+    console.error("Signup error:", error.message);
+    return res.status(500).json({ message: error.message, success: false });
   }
 };
 
@@ -67,52 +63,51 @@ const Logincontrol = async (req, res) => {
     const user = await UserModel.findOne({ email: email.toLowerCase() });
 
     if (!user) {
-      return res
-        .status(403)
-        .json({ message: "Email not found", success: false });
+      return res.status(403).json({ message: "Email not found", success: false });
     }
+
     const ispassequal = await bcrypt.compare(password, user.password);
     if (!ispassequal) {
-      return res.status(403).json({ message: "Password error", succes: false });
+      return res.status(403).json({ message: "Incorrect password", success: false });
     }
 
     const access_token = jwt.sign(
       { _id: user._id, email: user.email, role: user.role },
       process.env.ACCESS_SECRET_KEY,
-      { expiresIn: "20m" },
+      { expiresIn: "20m" }
     );
     const refresh_token = jwt.sign(
       { _id: user._id },
       process.env.REFRESH_SECRET_KEY,
-      { expiresIn: "15d" },
+      { expiresIn: "15d" }
     );
 
+    // ✅ Fixed for production — secure + sameSite none for cross domain
     res.cookie("access_token", access_token, {
       httpOnly: true,
-      secure: false,
-      sameSite: "lax",
+      secure: true,
+      sameSite: "none",
       maxAge: 20 * 60 * 1000,
     });
 
     res.cookie("refresh_token", refresh_token, {
       httpOnly: true,
-      secure: false,
-      sameSite: "lax",
+      secure: true,
+      sameSite: "none",
       maxAge: 15 * 24 * 60 * 60 * 1000,
     });
 
     res.status(200).json({
-      message: "login successful",
+      message: "Login successful",
       success: true,
       role: user.role,
       email,
       name: user.name,
     });
+
   } catch (error) {
-    return res.status(500).json({
-      message: "login failed",
-      success: false,
-    });
+    console.error("Login error:", error.message);
+    return res.status(500).json({ message: error.message, success: false });
   }
 };
 
