@@ -6,8 +6,15 @@ const signupvalidation = (req, res, next) => {
     email: Joi.string().email().required(),
     password: Joi.string().min(8).max(15).required(),
     age: Joi.number().optional(),
-     adminCode: Joi.string(),
-    role: Joi.string().valid("Admin", "Employee").default("Employee")
+    role: Joi.string().valid("Admin", "Employee").default("Employee"),
+     adminCode: Joi.when("role", {
+      is: "Admin",
+      then: Joi.string().required().messages({
+        "any.required": "Admin code is required",
+        "string.empty": "Admin code should not be empty"
+      }),
+      otherwise: Joi.string().optional().allow("", null)
+    })
   });
 
   const { error, value } = schema.validate(req.body, {
