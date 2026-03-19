@@ -5,7 +5,7 @@ const rateLimit = require("express-rate-limit");
 require("dotenv").config();
 require("./Models/db");
 require("./middleware/Cronjob");
-// const mongoSanitize = require("express-mongo-sanitize");
+const mongoSanitize = require("express-mongo-sanitize");
 
 const helmet = require("helmet");
 
@@ -15,7 +15,7 @@ const AuthRouter = require("./Routes/Router");
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-const frontendURL = process.env.frontend_url || "http://localhost:5173";
+const frontendURL = process.env.FRONTEND_URL;
 
 // CORS FIRST
 app.use(
